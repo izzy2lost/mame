@@ -18,6 +18,8 @@ jobs:
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
+      with:
+        vs-version: 16  # Specify Visual Studio 2019
 
     - uses: msys2/setup-msys2@v2
       with:
