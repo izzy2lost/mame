@@ -1,0 +1,42 @@
+name: UWP Builder
+
+on:  
+  workflow_dispatch:
+
+jobs:
+
+  build-windows-gcc:
+    runs-on: windows-2019
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - name: Checkout specific tag (mame0235)
+      uses: actions/checkout@v3
+      with:
+        ref: mame0235  # Checkout only the mame0235 tag
+
+    - uses: msys2/setup-msys2@v2
+      with:
+        install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
+
+    - name: Build
+      env:
+        MINGW64: "/mingw64"
+        ARCHOPTS: "-fuse-ld=lld"
+        OVERRIDE_AR: "llvm-ar"
+        TOOLS: 1
+      run: make vs2019_uwp MSBUILD=1
+
+    - name: Upload UWP App Packages
+      uses: actions/upload-artifact@v3
+      with:
+        name: uwp-app-packages
+        path: |
+          **/*.appx
+          **/*.appxbundle
+          **/*.msix
+          **/*.msixbundle
+          **/*.appxsym
+          **/*.appxupload
+          **/*.cer
