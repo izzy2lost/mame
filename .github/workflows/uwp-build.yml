@@ -28,13 +28,13 @@ jobs:
         TOOLS: 1
       run: make vs2019_uwp
 
-    - name: Zip project files
+    - name: 7zip project files
       run: |
         mkdir -p artifacts
-        zip -r artifacts/project-files.zip . -i "*.sln" "*.vcxproj" "*.vcxproj.filters" "*.csproj" "*.proj"
+        "C:\Program Files\7-Zip\7z.exe" a artifacts/project-files.7z . -i "*.sln" "*.vcxproj" "*.vcxproj.filters" "*.csproj" "*.proj"
 
     - name: Upload project files artifact
       uses: actions/upload-artifact@v4
       with:
         name: project-files
-        path: artifacts/project-files.zip
+        path: artifacts/project-files.7z
