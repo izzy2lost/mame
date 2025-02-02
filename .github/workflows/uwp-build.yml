@@ -27,3 +27,14 @@ jobs:
         OVERRIDE_AR: "llvm-ar"
         TOOLS: 1
       run: make vs2019_uwp
+
+    - name: Zip project files
+      run: |
+        mkdir -p artifacts
+        zip -r artifacts/project-files.zip . -i "*.sln" "*.vcxproj" "*.vcxproj.filters" "*.csproj" "*.proj"
+
+    - name: Upload project files artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: project-files
+        path: artifacts/project-files.zip
