@@ -1,40 +1,86 @@
-name: UWP Builder
+name: Xbox MAME Builder
 
-on:  
+on:
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag Name'
+        required: true
+        default: 'v1.0.0'
+      package_name:
+        description: 'Package Name'
+        required: true
+        default: 'Xbox_MAME'
 
 jobs:
+  build:
+    runs-on: windows-2019  # ✅ Using Windows 2019 for Visual Studio 2019
 
-  build-uwp:
-    runs-on: windows-2019
-    defaults:
-      run:
-        shell: msys2 {0}
+    env:
+      SolutionPath: "build/projects/uwp/mame/vs2019-winstore82/mame.sln"
+      Platform: x64
+      Configuration: Debug
+      BuildMode: SideLoadOnly
+      AppxBundle: Never
+      ProjectPath: "build/projects/uwp/mame/vs2019-winstore82/mame.vcxproj"
+      ProjectDirectory: "./build/projects/uwp/mame"
+      PackageOutputRootDir: "D:\\a\\mame-emulator\\mame-emulator\\AppPackages"
+      PackageOutputDir: "D:\\a\\mame-emulator\\mame-emulator\\MAME-XBOX"
+
     steps:
-    - name: Checkout specific tag (mame0235)
-      uses: actions/checkout@v4
-      with:
-        ref: mame0235  # Checkout only the mame0235 tag
+      - name: Download MAME Release
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/izzy2lost/mame/releases/download/1.0.0.0/MAME-XBOX-UWP.7z" -OutFile "MAME-XBOX-UWP.7z"
+        shell: pwsh
 
-    - uses: msys2/setup-msys2@v2
-      with:
-        install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
+      - name: Extract MAME Release
+        run: |
+          7z x MAME-XBOX-UWP.7z -o"./"
+        shell: pwsh
 
-    - name: Build
-      env:
-        MINGW64: "/mingw64"
-        ARCHOPTS: "-fuse-ld=lld"
-        OVERRIDE_AR: "llvm-ar"
-        TOOLS: 1
-      run: make vs2019_uwp
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
+        
+      - name: Generate Self-Signed Certificate
+        id: generate_cert
+        run: |
+          $cert = New-SelfSignedCertificate -CertStoreLocation "Cert:\CurrentUser\My" -Subject "CN=MyUWPCert" -KeyAlgorithm RSA -KeyLength 2048 -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider" -KeyExportPolicy Exportable -NotAfter (Get-Date).AddYears(1) -Type CodeSigningCert
+          echo "THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+        shell: pwsh
 
-    - name: 7zip all files
-      run: |
-        mkdir -p artifacts
-        "C:\Program Files\7-Zip\7z.exe" a artifacts/all-files.7z *
+      - name: Set Package Name
+        id: set_package_name
+        run: |
+          echo "PACKAGE_NAME=${{ github.event.inputs.package_name }}_${{ github.event.inputs.tag_name }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
-    - name: Upload all files artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: all-files
-        path: artifacts/all-files.7z
+      - name: App Build
+        run: |
+          msbuild /restore `
+            "$env:SolutionPath" `
+            /p:Platform=$env:Platform `
+            /p:Configuration=$env:Configuration `
+            /p:UapAppxPackageBuildMode=$env:BuildMode `
+            /p:AppxBundle=$env:AppxBundle `
+            /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}" `
+            /p:AppxPackageTestDir="${env:PackageOutputRootDir}\${{ env.PACKAGE_NAME }}" `
+            /p:RestorePackagesConfig=true `
+            /p:AppxPackageSigningEnabled=true
+        shell: pwsh    
+
+      - name: Create Archive
+        run: |
+          $PackagePath = "${env:PackageOutputRootDir}"
+          if (Test-Path $PackagePath) {
+            Write-Host "Creating archive for: $PackagePath"
+            Compress-Archive -Path "$PackagePath\*" -DestinationPath "${env:PackageOutputRootDir}\MAME_Archive.zip"
+          } else {
+            Write-Host "Package path does not exist for archiving: $PackagePath"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: MAME_Archive
+          path: D:\a\mame-emulator\mame-emulator\AppPackages\MAME_Archive.zip
