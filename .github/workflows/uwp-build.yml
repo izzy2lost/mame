@@ -5,7 +5,7 @@ on:
 
 jobs:
 
-  build-windows-gcc:
+  build-uwp:
     runs-on: windows-2019
     defaults:
       run:
@@ -17,13 +17,16 @@ jobs:
         ref: mame0235  # Checkout only the mame0235 tag
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v1.0.2
       with:
-        vs-version: 16  # Specify Visual Studio 2019
+        vs-version: 16 # Specify Visual Studio 2019
 
     - uses: msys2/setup-msys2@v2
       with:
         install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
+
+    - name: Display MSBuild path
+      run: where msbuild
 
     - name: Build
       env:
