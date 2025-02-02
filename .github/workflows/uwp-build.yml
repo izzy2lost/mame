@@ -19,7 +19,7 @@ jobs:
     env:
       SolutionPath: "build/projects/uwp/mame/vs2019-winstore82/mame.sln"
       Platform: x64
-      Configuration: Debug
+      Configuration: Release
       BuildMode: SideLoadOnly
       AppxBundle: Never
       ProjectPath: "build/projects/uwp/mame/vs2019-winstore82/mame.vcxproj"
