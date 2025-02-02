@@ -12,7 +12,7 @@ jobs:
         shell: msys2 {0}
     steps:
     - name: Checkout specific tag (mame0235)
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: mame0235  # Checkout only the mame0235 tag
 
@@ -29,7 +29,7 @@ jobs:
       run: make vs2019_uwp MSBUILD=1
 
     - name: Upload UWP App Packages
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: uwp-app-packages
         path: |
