@@ -26,7 +26,7 @@ jobs:
         ARCHOPTS: "-fuse-ld=lld"
         OVERRIDE_AR: "llvm-ar"
         TOOLS: 1
-      run: make vs2017_uwp
+      run: make vs2015_uwp
 
     - name: 7zip all files
       run: |
