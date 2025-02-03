@@ -14,7 +14,7 @@ jobs:
     - name: Checkout specific tag (mame0235)
       uses: actions/checkout@v4
       with:
-        ref: mame0179 
+        ref: mame0235
 
     - uses: msys2/setup-msys2@v2
       with:
@@ -26,7 +26,7 @@ jobs:
         ARCHOPTS: "-fuse-ld=lld"
         OVERRIDE_AR: "llvm-ar"
         TOOLS: 1
-      run: make vs2015_uwp
+      run: make vs2017_uwp
 
     - name: 7zip all files
       run: |
