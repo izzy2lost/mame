@@ -40,8 +40,20 @@ jobs:
       - name: Setup MSYS2 with MinGW64
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64  # ✅ Ensures MinGW64 is used for all MSYS2 commands
-          install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
+          msystem: MINGW64  # ✅ Ensures MinGW64 is used
+          install: git make mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++  # ❌ Do NOT install latest GCC
+
+      - name: Download and Install GCC 6.3.0
+        run: |
+          wget https://downloads.sourceforge.net/project/mingw-w64/Toolchains%20targetting%20Win64/Personal%20Builds/rubenvb/GCC-6.3.0-x86_64/mingw-w64-x86_64-6.3.0-release-posix-seh-rt_v5-rev2.7z
+          7z x mingw-w64-x86_64-6.3.0-release-posix-seh-rt_v5-rev2.7z -o/mingw64
+          echo "/mingw64/bin" >> $GITHUB_PATH  # ✅ Ensure GCC 6.3.0 is in PATH
+        shell: msys2 {0}
+
+      - name: Verify GCC Version
+        run: |
+          gcc --version  # ✅ Check if GCC 6.3.0 is properly installed
+        shell: msys2 {0}
 
       - name: Build UWP Project Files
         env:
