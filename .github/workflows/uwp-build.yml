@@ -27,25 +27,28 @@ jobs:
       PackageOutputRootDir: "D:\\a\\mame-emulator\\mame-emulator\\AppPackages"
       PackageOutputDir: "D:\\a\\mame-emulator\\mame-emulator\\MAME-XBOX"
 
+    defaults:
+      run:
+        shell: msys2 {0}  # ✅ Ensures all MSYS2 commands use the correct shell
+
     steps:
       - name: Checkout specific tag
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag_name }}
 
-      - name: Setup MSYS2
+      - name: Setup MSYS2 with MinGW64
         uses: msys2/setup-msys2@v2
         with:
+          msystem: MINGW64  # ✅ Ensures MinGW64 is used for all MSYS2 commands
           install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
 
       - name: Build UWP Project Files
         env:
-          MINGW64: "/mingw64"
           ARCHOPTS: "-fuse-ld=lld"
           OVERRIDE_AR: "llvm-ar"
           TOOLS: 1
         run: make vs2019_uwp
-        shell: msys2 {0}
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v1
@@ -54,12 +57,12 @@ jobs:
         id: generate_cert
         run: |
           $cert = New-SelfSignedCertificate -CertStoreLocation "Cert:\CurrentUser\My" -Subject "CN=MyUWPCert" -KeyAlgorithm RSA -KeyLength 2048 -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider" -KeyExportPolicy Exportable -NotAfter (Get-Date).AddYears(1) -Type CodeSigningCert
-          echo "THUMBPRINT=$($cert.Thumbprint)" >> $GITHUB_ENV
+          echo "THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
         shell: pwsh
 
       - name: Set Package Name
         run: |
-          echo "PACKAGE_NAME=${{ github.event.inputs.package_name }}_${{ github.event.inputs.tag_name }}" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=${{ github.event.inputs.package_name }}_${{ github.event.inputs.tag_name }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
         shell: pwsh
 
       - name: Build UWP Solution
