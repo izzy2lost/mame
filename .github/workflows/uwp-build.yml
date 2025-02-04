@@ -6,7 +6,7 @@ on:
       tag_name:
         description: 'Tag Name'
         required: true
-        default: 'v1.0.0'
+        default: 'mame0235'
       package_name:
         description: 'Package Name'
         required: true
@@ -28,32 +28,41 @@ jobs:
       PackageOutputDir: "D:\\a\\mame-emulator\\mame-emulator\\MAME-XBOX"
 
     steps:
-      - name: Download MAME Release
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/izzy2lost/mame/releases/download/1.0.0.0/MAME-XBOX-UWP.7z" -OutFile "MAME-XBOX-UWP.7z"
-        shell: pwsh
+      - name: Checkout specific tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag_name }}
 
-      - name: Extract MAME Release
-        run: |
-          7z x MAME-XBOX-UWP.7z -o"./"
-        shell: pwsh
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
+
+      - name: Build UWP Project Files
+        env:
+          MINGW64: "/mingw64"
+          ARCHOPTS: "-fuse-ld=lld"
+          OVERRIDE_AR: "llvm-ar"
+          TOOLS: 1
+        run: make vs2019_uwp
+        shell: msys2 {0}
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v1
-        
+
       - name: Generate Self-Signed Certificate
         id: generate_cert
         run: |
           $cert = New-SelfSignedCertificate -CertStoreLocation "Cert:\CurrentUser\My" -Subject "CN=MyUWPCert" -KeyAlgorithm RSA -KeyLength 2048 -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider" -KeyExportPolicy Exportable -NotAfter (Get-Date).AddYears(1) -Type CodeSigningCert
-          echo "THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+          echo "THUMBPRINT=$($cert.Thumbprint)" >> $GITHUB_ENV
         shell: pwsh
 
       - name: Set Package Name
-        id: set_package_name
         run: |
-          echo "PACKAGE_NAME=${{ github.event.inputs.package_name }}_${{ github.event.inputs.tag_name }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+          echo "PACKAGE_NAME=${{ github.event.inputs.package_name }}_${{ github.event.inputs.tag_name }}" >> $GITHUB_ENV
+        shell: pwsh
 
-      - name: App Build
+      - name: Build UWP Solution
         run: |
           msbuild /restore `
             "$env:SolutionPath" `
