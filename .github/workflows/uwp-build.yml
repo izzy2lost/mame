@@ -2,66 +2,81 @@ name: UWP Builder
 
 on:
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag Name'
+        required: true
+        default: 'mame0235'
+      package_name:
+        description: 'Package Name'
+        required: true
+        default: 'Xbox_MAME'
 
 jobs:
   build-uwp:
     runs-on: windows-2019
 
     steps:
-    - name: Checkout specific tag (mame0235)
-      uses: actions/checkout@v4
-      with:
-        ref: mame0235  # Ensure this is a valid tag
+      - name: Checkout specific tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag_name }}
 
-    - name: Setup MSYS2 with MINGW64
-      uses: msys2/setup-msys2@v2
-      with:
-        install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
-        msystem: MINGW64  # Use MinGW 64-bit environment
-        update: true  # Optional: Update packages first
+      - name: Setup MSYS2 with MINGW64
+        uses: msys2/setup-msys2@v2
+        with:
+          install: git make mingw-w64-x86_64-gcc=6.3.0 mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
+          msystem: MINGW64
+          update: true
 
-    - name: Find and set up MSBuild
-      shell: pwsh
-      id: msbuild
-      run: |
-        # Use vswhere to locate Visual Studio installation
-        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-        if ($vsPath) {
-          # Locate msbuild.exe
-          $msbuildPath = Join-Path $vsPath "MSBuild\Current\Bin\MSBuild.exe"
-          if (Test-Path $msbuildPath) {
-            echo "MSBuild path: $msbuildPath"
-            echo "::set-output name=msbuild_path::$msbuildPath"
+      - name: Find and set up MSBuild
+        shell: pwsh
+        id: msbuild
+        run: |
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if ($vsPath) {
+            $msbuildPath = Join-Path $vsPath "MSBuild\Current\Bin\MSBuild.exe"
+            if (Test-Path $msbuildPath) {
+              echo "MSBuild path: $msbuildPath"
+              echo "MSBUILD_PATH=$msbuildPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+            } else {
+              Write-Error "MSBuild.exe not found!"
+              exit 1
+            }
           } else {
-            Write-Error "MSBuild.exe not found at $msbuildPath!"
+            Write-Error "Visual Studio with MSBuild not found!"
             exit 1
           }
-        } else {
-          Write-Error "Visual Studio with MSBuild not found!"
-          exit 1
-        }
 
-    - name: Build with MINGW64 and MSBUILD
-      shell: msys2 {0}  # Use MSYS2 shell for this step
-      env:
-        MSYSTEM: MINGW64  # Force MinGW 64-bit environment
-        ARCHOPTS: "-fuse-ld=lld"
-        OVERRIDE_AR: "llvm-ar"
-        TOOLS: 1
-        MSBUILD_PATH: ${{ steps.msbuild.outputs.msbuild_path }}  # Pass the full path to msbuild.exe
-      run: |
-        echo "Using MSBuild at: $MSBUILD_PATH"
-        make vs2019_uwp MSBUILD=1 MSBUILD_PATH="$MSBUILD_PATH"
+      - name: Build UWP Project Files
+        shell: msys2 {0}
+        env:
+          MSYSTEM: MINGW64
+          ARCHOPTS: "-fuse-ld=lld"
+          OVERRIDE_AR: "llvm-ar"
+          TOOLS: 1
+        run: make vs2019_uwp MSBUILD=1
 
-    - name: 7zip all files
-      shell: pwsh  # Use PowerShell for native Windows tools
-      run: |
-        7z a artifacts/all-files.7z *
-        # If 7z isn't in PATH, use full path:
-        # & "C:\Program Files\7-Zip\7z.exe" a artifacts/all-files.7z *
+      - name: Build UWP Solution
+        shell: pwsh
+        run: |
+          & $env:MSBUILD_PATH "${{ env.SolutionPath }}" `
+            /p:Platform=${{ env.Platform }} `
+            /p:Configuration=${{ env.Configuration }} `
+            /p:UapAppxPackageBuildMode=${{ env.BuildMode }} `
+            /p:AppxBundle=${{ env.AppxBundle }} `
+            /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}" `
+            /p:AppxPackageTestDir="${{ env.PackageOutputRootDir }}\${{ env.PACKAGE_NAME }}" `
+            /p:RestorePackagesConfig=true `
+            /p:AppxPackageSigningEnabled=true
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: all-files
-        path: artifacts/all-files.7z
+      - name: Archive build
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "${{ env.PackageOutputRootDir }}\*" -DestinationPath "${{ env.PackageOutputRootDir }}\MAME_Archive.zip"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAME_Archive
+          path: ${{ env.PackageOutputRootDir }}/MAME_Archive.zip
