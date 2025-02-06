@@ -126,7 +126,7 @@ endif
 ###########################################################################
 
 
-ifndef MAKETYPE
+ifdef MAKETYPE
 MAKETYPE := gmake
 endif
 
