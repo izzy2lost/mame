@@ -25,7 +25,7 @@ jobs:
       - name: Setup MSYS2 with MINGW64
         uses: msys2/setup-msys2@v2
         with:
-          install: git make mingw-w64-x86_64-gcc=6.3.0 mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
+          install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
           msystem: MINGW64
           update: true
 
