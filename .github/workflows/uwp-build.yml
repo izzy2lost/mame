@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-uwp:
-    runs-on: windows-2022  # Use the latest Windows runner
+    runs-on: windows-2019
 
     steps:
     - name: Checkout specific tag (mame0235)
@@ -22,15 +22,20 @@ jobs:
 
     - name: Find and set up MSBuild
       shell: pwsh
+      id: msbuild
       run: |
         # Use vswhere to locate Visual Studio installation
         $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
         if ($vsPath) {
-          # Add MSBuild to PATH
-          $msbuildPath = Join-Path $vsPath "MSBuild\Current\Bin"
-          echo "MSBuild path: $msbuildPath"
-          echo "Adding MSBuild to PATH"
-          Add-Content $env:GITHUB_PATH "$msbuildPath"
+          # Locate msbuild.exe
+          $msbuildPath = Join-Path $vsPath "MSBuild\Current\Bin\MSBuild.exe"
+          if (Test-Path $msbuildPath) {
+            echo "MSBuild path: $msbuildPath"
+            echo "::set-output name=msbuild_path::$msbuildPath"
+          } else {
+            Write-Error "MSBuild.exe not found at $msbuildPath!"
+            exit 1
+          }
         } else {
           Write-Error "Visual Studio with MSBuild not found!"
           exit 1
@@ -43,7 +48,10 @@ jobs:
         ARCHOPTS: "-fuse-ld=lld"
         OVERRIDE_AR: "llvm-ar"
         TOOLS: 1
-      run: make vs2019_uwp MSBUILD=1
+        MSBUILD_PATH: ${{ steps.msbuild.outputs.msbuild_path }}  # Pass the full path to msbuild.exe
+      run: |
+        echo "Using MSBuild at: $MSBUILD_PATH"
+        make vs2019_uwp MSBUILD=1 MSBUILD_PATH="$MSBUILD_PATH"
 
     - name: 7zip all files
       shell: pwsh  # Use PowerShell for native Windows tools
