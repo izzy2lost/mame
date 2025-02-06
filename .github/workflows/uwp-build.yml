@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-uwp:
-    runs-on: windows-2022  # Updated to 2022 runner
+    runs-on: windows-2022  # Use the latest Windows runner
 
     steps:
     - name: Checkout specific tag (mame0235)
@@ -17,17 +17,33 @@ jobs:
       uses: msys2/setup-msys2@v2
       with:
         install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
-        msystem: MINGW64  # Critical: Use MinGW 64-bit environment
+        msystem: MINGW64  # Use MinGW 64-bit environment
         update: true  # Optional: Update packages first
 
-    - name: Build with MINGW64
-      shell: msys2 {0}  # Explicitly use MSYS2 shell for this step
+    - name: Find and set up MSBuild
+      shell: pwsh
+      run: |
+        # Use vswhere to locate Visual Studio installation
+        $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+        if ($vsPath) {
+          # Add MSBuild to PATH
+          $msbuildPath = Join-Path $vsPath "MSBuild\Current\Bin"
+          echo "MSBuild path: $msbuildPath"
+          echo "Adding MSBuild to PATH"
+          Add-Content $env:GITHUB_PATH "$msbuildPath"
+        } else {
+          Write-Error "Visual Studio with MSBuild not found!"
+          exit 1
+        }
+
+    - name: Build with MINGW64 and MSBUILD
+      shell: msys2 {0}  # Use MSYS2 shell for this step
       env:
         MSYSTEM: MINGW64  # Force MinGW 64-bit environment
         ARCHOPTS: "-fuse-ld=lld"
         OVERRIDE_AR: "llvm-ar"
         TOOLS: 1
-      run: make vs2019_uwp
+      run: make vs2019_uwp MSBUILD=1
 
     - name: 7zip all files
       shell: pwsh  # Use PowerShell for native Windows tools
