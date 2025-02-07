@@ -1,4 +1,4 @@
-name: UWP Builder
+name: Xbox MAME Builder
 
 on:
   workflow_dispatch:
@@ -6,77 +6,88 @@ on:
       tag_name:
         description: 'Tag Name'
         required: true
-        default: 'mame0235'
+        default: 'v1.0.0'
       package_name:
         description: 'Package Name'
         required: true
         default: 'Xbox_MAME'
 
 jobs:
-  build-uwp:
-    runs-on: windows-2019
+  build:
+    runs-on: windows-2019  # ✅ Using Windows 2019 for Visual Studio 2015
+
+    env:
+      SolutionPath: "build/projects/uwp/mame/vs2015-winstore82/mame.sln"
+      Platform: x64
+      Configuration: Release
+      BuildMode: SideLoadOnly
+      AppxBundle: Never
+      ProjectPath: "build/projects/uwp/mame/vs2015-winstore82/mame.vcxproj"
+      ProjectDirectory: "./build/projects/uwp/mame"
+      PackageOutputRootDir: "D:\\a\\mame-emulator\\mame-emulator\\AppPackages"
+      PackageOutputDir: "D:\\a\\mame-emulator\\mame-emulator\\MAME-XBOX"
 
     steps:
-      - name: Checkout specific tag
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag_name }}
-
-      - name: Setup MSYS2 with MINGW64
-        uses: msys2/setup-msys2@v2
-        with:
-          install: git make mingw-w64-x86_64-gcc mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
-          msystem: MINGW64
-          update: true
-
-      - name: Find and set up MSBuild
-        shell: pwsh
-        id: msbuild
+      - name: Download MAME Release
         run: |
-          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-          if ($vsPath) {
-            $msbuildPath = Join-Path $vsPath "MSBuild\Current\Bin\MSBuild.exe"
-            if (Test-Path $msbuildPath) {
-              echo "MSBuild path: $msbuildPath"
-              echo "MSBUILD_PATH=$msbuildPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
-            } else {
-              Write-Error "MSBuild.exe not found!"
-              exit 1
-            }
-          } else {
-            Write-Error "Visual Studio with MSBuild not found!"
-            exit 1
-          }
-
-      - name: Build UWP Project Files
-        shell: msys2 {0}
-        env:
-          MSYSTEM: MINGW64
-          ARCHOPTS: "-fuse-ld=lld"
-          OVERRIDE_AR: "llvm-ar"
-          TOOLS: 1
-        run: make vs2019_uwp MSBUILD=1
-
-      - name: Build UWP Solution
+          Invoke-WebRequest -Uri "https://github.com/izzy2lost/mame/releases/download/1.0.0.0/all-files.7z" -OutFile "all-files.7z"
         shell: pwsh
+
+      - name: Extract MAME Release
         run: |
-          & $env:MSBUILD_PATH "${{ env.SolutionPath }}" `
-            /p:Platform=${{ env.Platform }} `
-            /p:Configuration=${{ env.Configuration }} `
-            /p:UapAppxPackageBuildMode=${{ env.BuildMode }} `
-            /p:AppxBundle=${{ env.AppxBundle }} `
+          7z x all-files.7z -o"./"
+        shell: pwsh
+        
+      - name: Install Visual Studio 2015
+        run: |
+          Invoke-WebRequest -Uri "https://aka.ms/vs/15/release/vs_installer.exe" -OutFile "vs_installer.exe"
+          Start-Process -FilePath "vs_installer.exe" -ArgumentList "--path cache --quiet --norestart --wait" -NoNewWindow -Wait
+
+      - name: Setup MSBuild for VS2015
+        run: |
+          $env:MSBUILD_PATH = "C:\Program Files (x86)\Microsoft Visual Studio 14.0\MSBuild\14.0\Bin\MSBuild.exe"
+          echo "MSBuild path set to: $env:MSBUILD_PATH"
+        shell: pwsh
+
+      - name: Generate Self-Signed Certificate
+        id: generate_cert
+        run: |
+          $cert = New-SelfSignedCertificate -CertStoreLocation "Cert:\CurrentUser\My" -Subject "CN=MyUWPCert" -KeyAlgorithm RSA -KeyLength 2048 -Provider "Microsoft Enhanced RSA and AES Cryptographic Provider" -KeyExportPolicy Exportable -NotAfter (Get-Date).AddYears(1) -Type CodeSigningCert
+          echo "THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      - name: Set Package Name
+        id: set_package_name
+        run: |
+          echo "PACKAGE_NAME=${{ github.event.inputs.package_name }}_${{ github.event.inputs.tag_name }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+      - name: App Build
+        run: |
+          & "$env:MSBUILD_PATH" /restore `
+            "$env:SolutionPath" `
+            /p:Platform=$env:Platform `
+            /p:Configuration=$env:Configuration `
+            /p:UapAppxPackageBuildMode=$env:BuildMode `
+            /p:AppxBundle=$env:AppxBundle `
             /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}" `
-            /p:AppxPackageTestDir="${{ env.PackageOutputRootDir }}\${{ env.PACKAGE_NAME }}" `
+            /p:AppxPackageTestDir="${env:PackageOutputRootDir}\${{ env.PACKAGE_NAME }}" `
             /p:RestorePackagesConfig=true `
             /p:AppxPackageSigningEnabled=true
+        shell: pwsh    
 
-      - name: Archive build
-        shell: pwsh
+      - name: Create Archive
         run: |
-          Compress-Archive -Path "${{ env.PackageOutputRootDir }}\*" -DestinationPath "${{ env.PackageOutputRootDir }}\MAME_Archive.zip"
+          $PackagePath = "${env:PackageOutputRootDir}"
+          if (Test-Path $PackagePath) {
+            Write-Host "Creating archive for: $PackagePath"
+            Compress-Archive -Path "$PackagePath\*" -DestinationPath "${env:PackageOutputRootDir}\MAME_Archive.zip"
+          } else {
+            Write-Host "Package path does not exist for archiving: $PackagePath"
+            exit 1
+          }
+        shell: pwsh
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MAME_Archive
-          path: ${{ env.PackageOutputRootDir }}/MAME_Archive.zip
+          path: D:\a\mame-emulator\mame-emulator\AppPackages\MAME_Archive.zip
