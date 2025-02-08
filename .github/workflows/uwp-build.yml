@@ -1,82 +1,31 @@
-name: UWP Builder
+name: Build MAME
 
 on:
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Tag Name'
-        required: true
-        default: 'mame0235'
-      package_name:
-        description: 'Package Name'
-        required: true
-        default: 'Xbox_MAME'
 
 jobs:
-  build-uwp:
+  build:
     runs-on: windows-2019
 
     steps:
-      - name: Checkout specific tag
-        uses: actions/checkout@v4
+      - name: Checkout tag mame0235
+        uses: actions/checkout@v2
         with:
-          ref: ${{ github.event.inputs.tag_name }}
+          ref: mame0235
 
-      - name: Setup MSYS2 with MINGW64
-        uses: msys2/setup-msys2@v2
-        with:
-          install: git make mingw-w64-x86_64-gcc=6.3.0 mingw-w64-x86_64-python mingw-w64-x86_64-lld mingw-w64-x86_64-libc++
-          msystem: MINGW64
-          update: true
-
-      - name: Find and set up MSBuild
-        shell: pwsh
-        id: msbuild
+      - name: Set up MSYS2
         run: |
-          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-          if ($vsPath) {
-            $msbuildPath = Join-Path $vsPath "MSBuild\Current\Bin\MSBuild.exe"
-            if (Test-Path $msbuildPath) {
-              echo "MSBuild path: $msbuildPath"
-              echo "MSBUILD_PATH=$msbuildPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
-            } else {
-              Write-Error "MSBuild.exe not found!"
-              exit 1
-            }
-          } else {
-            Write-Error "Visual Studio with MSBuild not found!"
-            exit 1
-          }
+          choco install msys2
+          C:\msys64\usr\bin\bash.exe -lc 'pacman -Syu --noconfirm'
 
-      - name: Build UWP Project Files
-        shell: msys2 {0}
-        env:
-          MSYSTEM: MINGW64
-          ARCHOPTS: "-fuse-ld=lld"
-          OVERRIDE_AR: "llvm-ar"
-          TOOLS: 1
-        run: make vs2019_uwp MSBUILD=1
-
-      - name: Build UWP Solution
-        shell: pwsh
+      - name: Install dependencies
         run: |
-          & $env:MSBUILD_PATH "${{ env.SolutionPath }}" `
-            /p:Platform=${{ env.Platform }} `
-            /p:Configuration=${{ env.Configuration }} `
-            /p:UapAppxPackageBuildMode=${{ env.BuildMode }} `
-            /p:AppxBundle=${{ env.AppxBundle }} `
-            /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}" `
-            /p:AppxPackageTestDir="${{ env.PackageOutputRootDir }}\${{ env.PACKAGE_NAME }}" `
-            /p:RestorePackagesConfig=true `
-            /p:AppxPackageSigningEnabled=true
+          C:\msys64\usr\bin\bash.exe -lc 'pacman -S --noconfirm mingw-w64-x86_64-toolchain make git sdl2 cmake python mingw-w64-x86_64-qt5 mingw-w64-x86_64-ccache'
 
-      - name: Archive build
-        shell: pwsh
+      - name: Clone MAME repository
         run: |
-          Compress-Archive -Path "${{ env.PackageOutputRootDir }}\*" -DestinationPath "${{ env.PackageOutputRootDir }}\MAME_Archive.zip"
+          C:\msys64\usr\bin\bash.exe -lc 'git clone https://github.com/mamedev/mame.git'
 
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MAME_Archive
-          path: ${{ env.PackageOutputRootDir }}/MAME_Archive.zip
+      - name: Build MAME with VS2019 UWP
+        run: |
+          C:\msys64\usr\bin\bash.exe -lc 'cd mame && make vs2019_uwp MSBUILD=1'
