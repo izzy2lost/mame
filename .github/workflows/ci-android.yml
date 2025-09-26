@@ -1,0 +1,62 @@
+name: Build MAME Android APK (arm64-v8a)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**.cpp'
+      - '**.h'
+      - '**.mk'
+      - '.github/workflows/android-build.yml'
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    env:
+      SDL2_VERSION: 2.32.10
+      SDL2_URL: https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-2.32.10.tar.gz
+
+    steps:
+      - name: Checkout MAME source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Download and cache SDL2
+        id: cache-sdl2
+        uses: actions/cache@v3
+        with:
+          path: SDL2-2.32.10
+          key: ${{ runner.os }}-sdl2-${{ env.SDL2_VERSION }}
+
+      - name: Fetch SDL2 if not cached
+        if: steps.cache-sdl2.outputs.cache-hit != 'true'
+        run: |
+          wget $SDL2_URL
+          tar -xzf SDL2-2.32.10.tar.gz
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;25.2.9519653"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653" >> $GITHUB_ENV
+
+      - name: Build MAME for arm64-v8a
+        run: |
+          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
+          export SDL2_DIR=$GITHUB_WORKSPACE/SDL2-2.32.10
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mame-arm64-v8a-apk
+          path: android/app/build/outputs/apk/arm64/debug/*.apk
