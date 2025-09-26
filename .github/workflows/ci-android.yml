@@ -52,7 +52,7 @@ jobs:
         run: |
           export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
           export SDL2_DIR=$GITHUB_WORKSPACE/SDL2-2.32.10
-          cd android
+          cd android-project
           ./gradlew assembleDebug
 
       - name: Upload APK Artifact
